@@ -36,7 +36,7 @@ docker run --rm --name pintos -it -v "$(pwd):/pintos" thierrysans/pintos bash
 
 即可进入由thierrysans教授提供的ubuntu环境，然后就可以愉快的跑代码啦
 
-![成功进入ubuntu环境的界面](../pintos/1.png)
+![成功进入ubuntu环境的界面](./1.png)
 
 图为成功进入ubuntu环境的界面
 
