@@ -73,6 +73,11 @@ In this task, we mainly modify `process.c` and deal with strings. However, to te
   - 更改`process_execute (const char *file_name)`
 
     - ```c
+      /* Starts a new thread running a user program loaded from
+         FILENAME.  The new thread may be scheduled (and may even exit)
+         before process_execute() returns.  Returns the new process's
+         thread id, or TID_ERROR if the thread cannot be created. */
+      tid_t
       process_execute (const char *file_name) 
       {
         char *fn_copy0, *fn_copy1;
@@ -81,6 +86,7 @@ In this task, we mainly modify `process.c` and deal with strings. However, to te
       
           /* Make a copy of FILE_NAME.
              Otherwise strtok_r will modify the const char *file_name. */
+          //strtok_r()函数用于分割字符串
           fn_copy0 = palloc_get_page(0);//palloc_get_page(0)动态分配了一个内存页
           if (fn_copy0 == NULL)//分配失败
               return TID_ERROR;
@@ -99,9 +105,11 @@ In this task, we mainly modify `process.c` and deal with strings. However, to te
       
       
         /* Create a new thread to execute FILE_NAME. */
+        //save_ptr是一个指向char*的指针变量，用于在strtok_r内部保存切分时的上下文
         char *save_ptr;
         char *cmd = strtok_r(fn_copy0, " ", &save_ptr);
         
+        //PRI_DEFAULT为默认的优先级，在thread.h文件中定义为31
         tid = thread_create(cmd, PRI_DEFAULT, start_process, fn_copy1);
         palloc_free_page(fn_copy0);
         if (tid == TID_ERROR)
@@ -109,8 +117,9 @@ In this task, we mainly modify `process.c` and deal with strings. However, to te
           palloc_free_page (fn_copy1); 
           return tid;
         }
-          //后续exec系统调用要求,懒得删了...
-          /* Sema down the parent process, waiting for child */
+      
+        /* Sema down the parent process, waiting for child */
+        //sema_down等同于信号量章节中wait()函数
         sema_down(&thread_current()->sema);
         if (!thread_current()->success) return TID_ERROR;//can't create new process thread,return error
       
@@ -122,6 +131,9 @@ In this task, we mainly modify `process.c` and deal with strings. However, to te
   - 更改`start_process (void *file_name_)`
 
     - ```c
+      /* A thread function that loads a user process and starts it
+         running. */
+      static void
       start_process (void *file_name_)
       {
         char *file_name = file_name_;
@@ -167,6 +179,7 @@ In this task, we mainly modify `process.c` and deal with strings. However, to te
         if (!success) 
         {
           thread_current ()->parent->success = false;
+          //sema_up相当于信号量中signal()函数
           sema_up (&thread_current ()->parent->sema);
           thread_exit ();
         }
@@ -188,6 +201,7 @@ In this task, we mainly modify `process.c` and deal with strings. However, to te
     - ```c
       /* Our implementation for Task 1:
         Push argument into stack, this method is used in Task 1 Argument Pushing */
+      //压栈操作，每一个argv[i]元素占4
       void
       push_argument (void **esp, int argc, int argv[]){
         *esp = (int)*esp & 0xfffffffc;
@@ -211,6 +225,14 @@ In this task, we mainly modify `process.c` and deal with strings. However, to te
   - 更改`process_wait (tid_t child_tid)`
 
     - ```c
+      /*
+      
+      1.内核终止时
+      2.子线程的tid不存在或其不是调用进程的子线程
+      3.process_wait()被成功调用了，即子进程成功运行结束
+      
+      以上三种情况立即返回-1
+      */
       int
       process_wait (tid_t child_tid UNUSED)
       {
@@ -221,9 +243,10 @@ In this task, we mainly modify `process.c` and deal with strings. However, to te
         struct child *temp2 = NULL;
         while (temp != list_end (l))
         {
-          temp2 = list_entry (temp, struct child, child_elem);
+          temp2 = list_entry (temp, struct child, child_elem);//把child_elem的指针变成temp2的指针
           if (temp2->tid == child_tid)
           {
+            //isrun判断儿子线程是否成功运行
             if (!temp2->isrun)
             {
               temp2->isrun = true;
@@ -237,10 +260,11 @@ In this task, we mainly modify `process.c` and deal with strings. However, to te
           }
           temp = list_next (temp);
         }
+        //找不到child_tid
         if (temp == list_end (l)) {
           return -1;
         }
-        list_remove (temp);
+        list_remove (temp);//从子进程列表中删除该子进程，因为它已经没有在运行了，也就是说父进程重新抢占回了资源
         return temp2->store_exit;
       }
       ```
@@ -254,7 +278,9 @@ In this task, we mainly modify `process.c` and deal with strings. However, to te
       void 
       sys_write (struct intr_frame* f)
       {
+        //unsigned int uint32_t
         uint32_t *user_ptr = f->esp;
+        //check_ptr2检查地址和页面的有效性
         check_ptr2 (user_ptr + 7);
         check_ptr2 (*(user_ptr + 6));
         *user_ptr++;
@@ -420,7 +446,7 @@ void release_lock_f(){
     - ```c
       void 
       sys_halt (struct intr_frame* f)
-      {c
+      {
         shutdown_power_off();
       }
       ```
